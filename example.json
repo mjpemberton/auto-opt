@@ -1,0 +1,47 @@
+{
+  "xtb": {
+    "chrg": 0,
+    "uhf": 0,
+    "solvent": "acetonitrile",
+    "jobname": "xtb_job",
+    "ts": false,
+    "constraints": []
+  },
+  "crest": {
+    "chrg": 0,
+    "uhf": 0,
+    "solvent": "acetonitrile",
+    "thresh": 1.0,
+    "time": "12:00:00",
+    "mem": 16000,
+    "cpus": 16,
+    "jobname": "crest_job",
+    "ts": false,
+    "constraints": []
+  },
+  "rank": {
+    "chrg": 0,
+    "mult": 1,
+    "qc_method": "m062x",
+    "basis_set": "def2tzvp",
+    "solvent": "acetonitrile",
+    "dispersion": "GD3",
+    "time": "02:00:00",
+    "mem": 4000,
+    "cpus": 4,
+    "max_confs": 50
+  },
+  "dft": {
+    "qc_method": "m062x",
+    "basis_set": "def2tzvp",
+    "solvent": "acetonitrile",
+    "dispersion": "GD3",
+    "time": "24:00:00",
+    "mem": 16000,
+    "cpus": 16,
+    "partition": "chemistry",
+    "ts": true,
+    "constraints": ["1-19"],
+    "jobname": "molecule"
+  }
+}

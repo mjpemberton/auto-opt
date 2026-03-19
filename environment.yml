@@ -1,0 +1,14 @@
+name: auto-opt
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.10
+  - numpy=2.0
+  - pip
+
+  # Computational chemistry tools
+  - xtb=6.5.0
+  - crest=2.12
+  - mctc-lib=0.3.0
