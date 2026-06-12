@@ -4,10 +4,68 @@ import json
 import time
 import argparse
 import subprocess
+import traceback
+from contextlib import redirect_stdout, redirect_stderr
 
 def run(cmd, cwd=None, capture=False):
-    print(f"[CMD] {' '.join(cmd)}")
-    return subprocess.run(cmd, cwd=cwd, check=True, text=True, capture_output=capture)
+    printable_cmd = " ".join(str(part) for part in cmd)
+    print(f"[CMD] {printable_cmd}", flush=True)
+
+    try:
+        if capture:
+            result = subprocess.run(
+                cmd,
+                cwd=cwd,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+            if result.stdout:
+                print(result.stdout, end="", flush=True)
+
+            if result.stderr:
+                print(result.stderr, end="", file=sys.stderr, flush=True)
+
+            return result
+
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            check=True,
+            text=True,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"[ERROR] Command exited with status {exc.returncode}: "
+            f"{printable_cmd}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+        if exc.stdout:
+            print(
+                "[COMMAND STDOUT]",
+                exc.stdout,
+                sep="\n",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        if exc.stderr:
+            print(
+                "[COMMAND STDERR]",
+                exc.stderr,
+                sep="\n",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        raise
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
@@ -184,42 +242,61 @@ def main():
         cfg = json.load(f)
 
     log_path = os.path.join(os.getcwd(), "auto_opt.log")
+    completed_successfully = False
 
-    with open(log_path, "w") as log:
-        sys.stdout = log
-        sys.stderr = log
-        sys.stdout.reconfigure(line_buffering=True)
-        sys.stderr.reconfigure(line_buffering=True)
+    with open(log_path, "w", buffering=1) as log:
+        with redirect_stdout(log), redirect_stderr(log):
+            print("--- Running auto-opt pipeline ---")
+            print(f"Working directory: {os.getcwd()}")
+            print(f"Input structure: {args.xyz}")
+            print(f"Configuration: {args.config}")
+            print()
 
-        print("--- Running auto-opt pipeline ---")
-        print(f"Working directory: {os.getcwd()}")
-        print(f"Input structure: {args.xyz}")
-        print(f"Configuration: {args.config}")
-        print("\n")
+            try:
+                xyz_path = os.path.abspath(args.xyz)
 
-        try:
-            xyz_path = os.path.abspath(args.xyz)
+                print("Beginning xTB optimisation")
+                xtbopt = stage_xtb(xyz_path, cfg)
+                print("xTB optimisation complete\n")
 
-            print("Beginning xTB optimisation")
-            xtbopt = stage_xtb(xyz_path, cfg)
-            print("xTB optimisation complete\n")
+                print("Beginning CREST conformer search")
+                ensemble = stage_crest(cfg, xtbopt)
+                print("CREST conformer search complete\n")
 
-            print("Beginning CREST conformer search")
-            ensemble = stage_crest(cfg, xtbopt)
-            print("CREST conformer search complete\n")
+                print("Beginning conformer ranking")
+                sps_dir = stage_rank(cfg, ensemble)
+                print("Conformer ranking complete\n")
 
-            print("Beginning conformer ranking")
-            sps_dir = stage_rank(cfg, ensemble)
-            print("Conformer ranking complete\n")
+                print("Beginning final DFT optimisation")
+                stage_dft(cfg, sps_dir)
+                print("Final DFT optimisation complete\n")
 
-            print("Beginning final DFT optimisation")
-            stage_dft(cfg, sps_dir)
-            print("Final DFT optimisation complete\n")
-        except Exception as e:
-            print(f"[ERROR] Pipeline failed: {e}")
-            raise
-        finally:
-            print("--- End of auto-opt run ---")
+                completed_successfully = True
+                print("[SUCCESS] Pipeline completed successfully.")
+
+            except BaseException as exc:
+                print(
+                    f"\n[ERROR] Pipeline terminated with "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                )
+                print("[TRACEBACK]", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                raise
+
+            finally:
+                if not completed_successfully:
+                    print(
+                        "[STATUS] Pipeline did not complete successfully.",
+                        file=sys.stderr,
+                    )
+
+                print("--- End of auto-opt run ---")
+                log.flush()
+                try:
+                    os.fsync(log.fileno())
+                except OSError:
+                    pass
 
 if __name__ == "__main__":
     main()

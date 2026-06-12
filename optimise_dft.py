@@ -149,16 +149,19 @@ def write_slurm_script(job_name, gjf_file, time, mem, cpus, partition="chemistry
 #SBATCH --output={out_file}
 #SBATCH --error={err_file}
 
-export GAUSS_SCRDIR=/local
-
 module purge
-module load slurm
 module load gaussian/16
 
-source
+source $g16profile
 
-echo "Running Gaussian job: {job_name}"
+echo "$GAUSS_SCRDIR"
+mkdir -p "$GAUSS_SCRDIR"
+chmod 700 "$GAUSS_SCRDIR"
+
+echo "Running Gaussian single-point for {job_name}"
 g16 < {gjf_file}
+
+rm -rf $GAUSS_SCRDIR
 """
     with open(slm_path, "w") as f:
         f.write(script)

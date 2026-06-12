@@ -1,0 +1,22 @@
+--- Running auto-opt pipeline ---
+Working directory: /home/i/mjp218/auto_opt/examples/nma
+Input structure: nma_ts.xyz
+Configuration: nma_ts.json
+
+Beginning xTB optimisation
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/optimise_xtb.py /home/i/mjp218/auto_opt/examples/nma/nma_ts.xyz --chrg 1 --uhf 0 --solvent acetonitrile --jobname xtb_job --ts --constraints 1-5
+Submitted batch job 1558469
+[INFO] Constraints file written: constraints.inp
+[INFO] Slurm script written: xtb_job.slm
+[INFO] Job submitted to Slurm queue.
+[WAIT] for xtbopt.xyz ...
+[OK] Found /home/i/mjp218/auto_opt/examples/nma/xtb/xtbopt.xyz
+xTB optimisation complete
+
+Beginning CREST conformer search
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/crest_search.py /home/i/mjp218/auto_opt/examples/nma/xtb/xtbopt.xyz --chrg 1 --uhf 0 --solvent acetonitrile --thresh 1.0 --time 12:00:00 --mem 16000 --cpus 16 --jobname crest_job --ts --constraints 1-5
+Submitted batch job 1558483
+[INFO] Constraints file written: constraints.inp
+[INFO] Slurm script written: crest_job.slm
+[INFO] Job submitted to Slurm queue.
+[WAIT] for crest_ensemble.xyz ...

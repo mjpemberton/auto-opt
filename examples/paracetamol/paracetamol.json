@@ -1,0 +1,47 @@
+{
+  "xtb": {
+    "chrg": 0,
+    "uhf": 0,
+    "solvent": "water",
+    "jobname": "xtb_job",
+    "ts": false,
+    "constraints": []
+  },
+  "crest": {
+    "chrg": 0,
+    "uhf": 0,
+    "solvent": "water",
+    "thresh": 1.0,
+    "time": "12:00:00",
+    "mem": 16000,
+    "cpus": 16,
+    "jobname": "crest_job",
+    "ts": false,
+    "constraints": []
+  },
+  "rank": {
+    "chrg": 0,
+    "mult": 1,
+    "qc_method": "b3lyp",
+    "basis_set": "6-31G*",
+    "solvent": "water",
+    "dispersion": "none",
+    "time": "02:00:00",
+    "mem": 4000,
+    "cpus": 4,
+    "max_confs": 50
+  },
+  "dft": {
+    "qc_method": "b3lyp",
+    "basis_set": "6-31G*",
+    "solvent": "water",
+    "dispersion": "none",
+    "time": "24:00:00",
+    "mem": 16000,
+    "cpus": 16,
+    "partition": "chemistry",
+    "ts": false,
+    "constraints": [],
+    "jobname": "paracetamol"
+  }
+}

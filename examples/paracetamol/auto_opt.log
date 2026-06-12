@@ -1,0 +1,60 @@
+--- Running auto-opt pipeline ---
+Working directory: /home/i/mjp218/auto_opt/examples/paracetamol
+Input structure: paracetamol.xyz
+Configuration: paracetamol.json
+
+Beginning xTB optimisation
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/optimise_xtb.py /home/i/mjp218/auto_opt/examples/paracetamol/paracetamol.xyz --chrg 0 --uhf 0 --solvent water --jobname xtb_job
+Submitted batch job 1558458
+[INFO] Slurm script written: xtb_job.slm
+[INFO] Job submitted to Slurm queue.
+[WAIT] for xtbopt.xyz ...
+[OK] Found /home/i/mjp218/auto_opt/examples/paracetamol/xtb/xtbopt.xyz
+xTB optimisation complete
+
+Beginning CREST conformer search
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/crest_search.py /home/i/mjp218/auto_opt/examples/paracetamol/xtb/xtbopt.xyz --chrg 0 --uhf 0 --solvent water --thresh 1.0 --time 12:00:00 --mem 16000 --cpus 16 --jobname crest_job
+Submitted batch job 1558459
+[INFO] Slurm script written: crest_job.slm
+[INFO] Job submitted to Slurm queue.
+[WAIT] for crest_ensemble.xyz ...
+[OK] Found /home/i/mjp218/auto_opt/examples/paracetamol/crest/crest_ensemble.xyz
+CREST conformer search complete
+
+Beginning conformer ranking
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/rank_conformers.py /home/i/mjp218/auto_opt/examples/paracetamol/crest/crest_ensemble.xyz --chrg 0 --mult 1 --qc_method b3lyp --basis_set 6-31G* --solvent water --dispersion none --time 02:00:00 --mem 4000 --cpus 4 --max_confs 50
+Submitted batch job 1558460
+Submitted batch job 1558461
+Submitted batch job 1558462
+Submitted batch job 1558463
+Submitted batch job 1558464
+Submitted batch job 1558465
+[INFO] Found 6 conformers in /home/i/mjp218/auto_opt/examples/paracetamol/crest/crest_ensemble.xyz
+[INFO] Taking top 6 conformers for single point calculations
+[INFO] Submitted conf_1.slm.
+[INFO] Submitted conf_2.slm.
+[INFO] Submitted conf_3.slm.
+[INFO] Submitted conf_4.slm.
+[INFO] Submitted conf_5.slm.
+[INFO] Submitted conf_6.slm.
+[INFO] All conformer jobs have been submitted.
+[WAIT] Gaussian SPS jobs in crest/sps
+[OK] All SPS jobs completed.
+Conformer ranking complete
+
+Beginning final DFT optimisation
+[CMD] /scratch/projects/pra-0052/.conda/envs/auto-opt/bin/python /home/i/mjp218/auto_opt/optimise_dft.py --sps_dir ../crest/sps --qc_method b3lyp --basis_set 6-31G* --solvent water --dispersion none --time 24:00:00 --mem 16000 --cpus 16 --opt_dir . --jobname paracetamol
+[INFO] Lowest energy: -515.4981438350 Ha from conf_3.out
+Submitted batch job 1558466
+[INFO] Submission complete.
+[WAIT] for paracetamol_opt.out ...
+[OK] Found /home/i/mjp218/auto_opt/examples/paracetamol/opt/paracetamol_opt.out
+[INFO] Waiting for final optimisation completion...
+[INFO] Waiting for final optimisation completion...
+[INFO] Waiting for final optimisation completion...
+[INFO] Waiting for final optimisation completion...
+[OK] Final DFT optimisation completed: /home/i/mjp218/auto_opt/examples/paracetamol/opt/paracetamol_opt.out
+Final DFT optimisation complete
+
+[SUCCESS] Pipeline completed successfully.
+--- End of auto-opt run ---
