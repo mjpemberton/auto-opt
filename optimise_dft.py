@@ -2,7 +2,17 @@ import os
 import re
 import argparse
 import subprocess
-from typing import List, Tuple, Optional
+
+def gaussian_out_completed(path):
+    """Return True only for a normally terminated Gaussian calculation."""
+    try:
+        with open(path, "r", errors="ignore") as f:
+            return (
+                "Normal termination of Gaussian 16"
+                in f.read()[-300000:]
+            )
+    except Exception:
+        return False
 
 def parse_gaussian_scf_energy(gauss_out):
     """
@@ -131,7 +141,7 @@ def write_gjf_ts_full_from_chk(fname, qc_method, basis_set, solvent, dispersion,
         f.write(f"\n")
     return path
 
-def write_slurm_script(job_name, gjf_file, time, mem, cpus, partition="chemistry", outdir="."):
+def write_slurm_script(job_name, gjf_file, time, mem, cpus, partition="nodes", outdir="."):
     """Write a Slurm submission script for the optimisation."""
     os.makedirs(outdir, exist_ok=True)
     slm_path = os.path.join(outdir, f"{job_name}.slm")
@@ -148,6 +158,8 @@ def write_slurm_script(job_name, gjf_file, time, mem, cpus, partition="chemistry
 #SBATCH --partition={partition}
 #SBATCH --output={out_file}
 #SBATCH --error={err_file}
+
+set -e
 
 module purge
 module load gaussian/16
@@ -167,48 +179,64 @@ rm -rf $GAUSS_SCRDIR
         f.write(script)
     return slm_path
 
-def submit_sbatch(slm_path, workdir=".", dependency=None):
-    """
-    Submit sbatch; returns jobid string or None on failure.
-    If sependency is provided, it should be line: 'afterok:123456'
-    """
-    cmd = ["sbatch"]
-    if dependency:
-        cmd.extend(["--dependency", dependency])
-    cmd.append(os.path.basename(slm_path))
+def submit_sbatch(slm_path, workdir="."):
+    """Submit an sbatch job and wait for it to finish."""
+
+    cmd = ["sbatch", "--wait", os.path.basename(slm_path)]
+
     try:
         res = subprocess.run(cmd, cwd=workdir, check=True, capture_output=True, text=True)
-        print(res.stdout.strip())
-        m = re.search(r"Submitted batch job\s+(\d+)", res.stdout)
-        return m.group(1) if m else None
+        if res.stdout:
+            print(res.stdout.strip())
+
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] sbatch failed for {slm_path}: {e}")
         if e.stdout:
             print(e.stdout)
         if e.stderr:
             print(e.stderr)
-        return None
+        raise
     
-def pick_lowest_energy_conformer(sps_dir):
+def pick_lowest_energy_conformer(sps_dir, conformers=None):
     """
-    Return (out_path, gjf_path, energy) of the lowest-energy conformer.
+    Return (out_path, gjf_path, energy) of the lowest-energy
+    successfully completed conformer.
     """
-    outs = list_out_files(sps_dir)
+    if conformers:
+        outs = [
+            os.path.join(sps_dir, f"{conf}.out")
+            for conf in conformers
+        ]
+    else:
+        outs = list_out_files(sps_dir)
+
     if not outs:
-        raise FileNotFoundError(f"No .out files found in {sps_dir}")
-    
+        raise FileNotFoundError(
+            f"No conformer outputs found in {sps_dir}"
+        )
     best = None
     for outp in outs:
+        if not gaussian_out_completed(outp):
+            print(
+                f"[WARN] Gaussian calculation did not terminate normally: "
+                f"{outp}; skipping."
+            )
+            continue
+
         e = parse_gaussian_scf_energy(outp)
         if e is None:
             print(f"[WARN] No SCF energy found in {outp}; skipping.")
             continue
         if (best is None) or (e < best[2]):
             best = (outp, match_gjf_for_out(outp), e)
-    
     if best is None:
-        raise RuntimeError("Could not find any SCF energies in SPS outputs.")
-    print(f"[INFO] Lowest energy: {best[2]:.10f} Ha from {os.path.basename(best[0])}")
+        raise RuntimeError(
+            "Could not find any valid SCF energies in SPS outputs."
+        )
+    print(
+        f"[INFO] Lowest energy: {best[2]:.10f} Ha "
+        f"from {os.path.basename(best[0])}"
+    )
     return best
 
 def main():
@@ -226,8 +254,9 @@ def main():
     parser.add_argument("--time", default="2:00:00", help="Required walltime")
     parser.add_argument("--mem", type=int, default=16000, help="Memory requirement (MB)")
     parser.add_argument("--cpus", type=int, default=16, help="Number of processors required")
-    parser.add_argument("--partition", default="chemistry", help="SLURM partition")
+    parser.add_argument("--partition", default="nodes", help="SLURM partition")
     parser.add_argument("--opt_dir", default=".", help="Directory to place optimisation inputs/scripts")
+    parser.add_argument("--conformers", nargs="+", help="Conformer names eligible for final DFT selection")
 
     # TS options   
     parser.add_argument("--ts", action="store_true", help="Run 2 step TS optimisation")
@@ -235,7 +264,7 @@ def main():
 
     args = parser.parse_args()
 
-    outp, gjf, energy = pick_lowest_energy_conformer(args.sps_dir)
+    outp, gjf, energy = pick_lowest_energy_conformer(args.sps_dir, args.conformers)
     chrg_in, mult_in, coords = read_gjf_coordinates(gjf)
 
     chrg = args.chrg if args.chrg is not None else chrg_in
@@ -269,6 +298,16 @@ def main():
             partition=args.partition
         )
         submit_sbatch(slm, workdir=args.opt_dir)
+
+        out_path = os.path.join(
+            args.opt_dir,
+            f"{job_name}.out",
+        )
+
+        if not gaussian_out_completed(out_path):
+            raise RuntimeError(
+                f"Gaussian optimisation did not terminate normally: {out_path}"
+            )
 
     else:
         if not args.constraints:
@@ -309,7 +348,17 @@ def main():
             cpus=args.cpus,
             partition=args.partition
         )
-        jid1 = submit_sbatch(frozen_slm, workdir=args.opt_dir)
+        submit_sbatch(frozen_slm, workdir=args.opt_dir)
+
+        frozen_out = os.path.join(
+            args.opt_dir,
+            f"{frozen_job}.out",
+        )
+
+        if not gaussian_out_completed(frozen_out):
+            raise RuntimeError(
+                f"Frozen TS optimisation did not terminate normally: {frozen_out}"
+            )
 
         full_gjf = args.jobname + "_full.gjf"
         full_job = args.jobname + "_full"
@@ -334,10 +383,19 @@ def main():
             partition=args.partition
         )
 
-        dep = f"afterok:{jid1}" if jid1 else None
-        submit_sbatch(full_slm, workdir=args.opt_dir, dependency=dep)
+        submit_sbatch(full_slm, workdir=args.opt_dir)
 
-    print("[INFO] Submission complete.")
+        full_out = os.path.join(
+            args.opt_dir,
+            f"{full_job}.out",
+        )
+
+        if not gaussian_out_completed(full_out):
+            raise RuntimeError(
+                f"Full TS optimisation did not terminate normally: {full_out}"
+            )
+
+    print("[INFO] DFT optimisation completed successfully.")
 
 if __name__ == "__main__":
     main()

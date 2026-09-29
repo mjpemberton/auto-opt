@@ -42,7 +42,7 @@ def write_gjf(conf_num, comment, atoms, chrg, mult, qc_method, basis_set, solven
         f.write("\n")
     return filename
 
-def write_slurm_script(conf_num, gjf_file, qc_method, time, mem, cpus, partition="chemistry", outdir="."):
+def write_slurm_script(conf_num, gjf_file, qc_method, time, mem, cpus, partition="nodes", outdir="."):
     """Write a Slurm submission script Gaussian single-point."""
     job_name = f"conf_{conf_num}"
     out_file = f"{job_name}.out"
@@ -79,12 +79,24 @@ rm -rf $GAUSS_SCRDIR
     return filename
 
 def submit_job(slurm_script, outdir):
-    """Submit job via sbatch."""
+    """Submit job via sbatch and return its Slurm job ID."""
     try:
-        subprocess.run(["sbatch", slurm_script], cwd=outdir, check=True)
-        print(f"[INFO] Submitted {slurm_script}.")
+        result = subprocess.run(
+            ["sbatch", "--parsable", slurm_script],
+            cwd=outdir,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        job_id = result.stdout.strip().split(";")[0]
+
+        print(f"[INFO] Submitted {slurm_script} as job {job_id}.")
+        return job_id
+
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Failed to submit {slurm_script}: {e}")
+        raise
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Gaussian inputs for CREST conformers and submit via Slurm.")
@@ -99,7 +111,7 @@ def main():
     parser.add_argument("--mem", type=int, default=4000, help="Memory requirement (MB)")
     parser.add_argument("--cpus", type=int, default=4, help="Number of processors required")
     parser.add_argument("--max_confs", type=int, default=50, help="Maximum number of conformers to process")
-    parser.add_argument("--partition", default="chemistry", help="SLURM partition")
+    parser.add_argument("--partition", default="nodes", help="SLURM partition")
 
     args = parser.parse_args()
 
@@ -113,33 +125,38 @@ def main():
 
     outdir = "sps"
     os.makedirs(outdir, exist_ok=True)
+    jobids_path = os.path.join(outdir, "jobids.txt")
 
-    for i, (comment, atoms) in enumerate(selected, start=1):
-        gjf = write_gjf(
-            conf_num=i,
-            comment=comment,
-            atoms=atoms,
-            chrg=args.chrg,
-            mult=args.mult,
-            qc_method=args.qc_method,
-            basis_set=args.basis_set,
-            solvent=args.solvent,
-            dispersion=args.dispersion,
-            mem=args.mem,
-            cpus=args.cpus,
-            outdir=outdir
-        )
-        slurm = write_slurm_script(
-            conf_num=i,
-            gjf_file=os.path.basename(gjf),
-            qc_method=args.qc_method,
-            time=args.time,
-            mem=args.mem,
-            cpus=args.cpus,
-            partition=args.partition,
-            outdir=outdir
-        )
-        submit_job(slurm, outdir)
+    with open(jobids_path, "w") as job_file:
+        for i, (comment, atoms) in enumerate(selected, start=1):
+            gjf = write_gjf(
+                conf_num=i,
+                comment=comment,
+                atoms=atoms,
+                chrg=args.chrg,
+                mult=args.mult,
+                qc_method=args.qc_method,
+                basis_set=args.basis_set,
+                solvent=args.solvent,
+                dispersion=args.dispersion,
+                mem=args.mem,
+                cpus=args.cpus,
+                outdir=outdir
+            )
+            slurm = write_slurm_script(
+                conf_num=i,
+                gjf_file=os.path.basename(gjf),
+                qc_method=args.qc_method,
+                time=args.time,
+                mem=args.mem,
+                cpus=args.cpus,
+                partition=args.partition,
+                outdir=outdir
+            )
+            
+            job_id = submit_job(slurm, outdir)
+            job_file.write(f"conf_{i} {job_id}\n")
+            job_file.flush()
 
     print("[INFO] All conformer jobs have been submitted.")
 

@@ -35,7 +35,7 @@ def write_constraints_file(atoms, constraints, filename="constraints.inp"):
 
 def write_slurm_script(
     job_name, xyz_file, chrg, uhf, solvent, thresh=1.0, ts=False, time="12:00:00",
-    mem=16000, cpus=16, partition="chemistry"
+    mem=16000, cpus=16, partition="nodes"
 ):
     """Write a Slurm submission script for CREST conformer search and CREGEN redundant
     conformer elimination."""
@@ -60,6 +60,8 @@ def write_slurm_script(
 #SBATCH --output={out_file}
 #SBATCH --error={err_file}
 
+set -e
+
 module purge
 conda activate auto-opt
 
@@ -82,6 +84,8 @@ echo "CREGEN redundant conformer elimination with threshold {thresh} Å."
 
 {cregen_cmd}
 
+test -s crest_ensemble.xyz
+
 echo "CREGEN completed."
 """
     with open(f"{job_name}.slm", "w") as f:
@@ -89,12 +93,16 @@ echo "CREGEN completed."
     print(f"[INFO] Slurm script written: {job_name}.slm")
 
 def submit_job(job_name):
-    """Submit job via sbatch."""
+    """Submit CREST job via sbatch and wait for it to finish."""
     try:
-        subprocess.run(["sbatch", f"{job_name}.slm"], check=True)
-        print("[INFO] Job submitted to Slurm queue.")
+        subprocess.run(
+            ["sbatch", "--wait", f"{job_name}.slm"],
+            check=True,
+        )
+        print("[INFO] CREST job completed successfully.")
     except subprocess.CalledProcessError as e:
-        print("[ERROR] Failed to submit job:", e)
+        print("[ERROR] CREST job failed:", e)
+        raise
 
 def main():
     parser = argparse.ArgumentParser(description="Automate xTB geometry optimisation via Slurm.")

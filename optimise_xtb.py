@@ -35,7 +35,7 @@ def write_constraints_file(atoms, constraints, filename="constraints.inp"):
 
 def write_slurm_script(
     job_name, xyz_file, chrg, uhf, solvent, ts=False, time="00:30:00",
-    mem=1000, cpus=1, partition="chemistry"
+    mem=1000, cpus=1, partition="nodes"
 ):
     """Write a Slurm submission script for xTB optimisation."""
     out_file = f"{job_name}.out"
@@ -57,6 +57,8 @@ def write_slurm_script(
 #SBATCH --output={out_file}
 #SBATCH --error={err_file}
 
+set -e
+
 module purge
 conda activate auto-opt
 
@@ -69,6 +71,8 @@ echo "Using {cpus} CPUs"
 
 {xtb_cmd}
 
+test -s xtbopt.xyz
+
 echo "xTB job completed."
 """
     with open(f"{job_name}.slm", "w") as f:
@@ -76,12 +80,16 @@ echo "xTB job completed."
     print(f"[INFO] Slurm script written: {job_name}.slm")
 
 def submit_job(job_name):
-    """Submit job via sbatch."""
+    """Submit job via sbatch and wait for it to finish."""
     try:
-        subprocess.run(["sbatch", f"{job_name}.slm"], check=True)
-        print("[INFO] Job submitted to Slurm queue.")
+        subprocess.run(
+            ["sbatch", "--wait", f"{job_name}.slm"],
+            check=True,
+        )
+        print("[INFO] Job completed successfully.")
     except subprocess.CalledProcessError as e:
-        print("[ERROR] Failed to submit job:", e)
+        print("[ERROR] xTB job failed:", e)
+        raise
 
 def main():
     parser = argparse.ArgumentParser(description="Automate xTB geometry optimisation via Slurm.")
