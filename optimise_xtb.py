@@ -60,7 +60,8 @@ def write_slurm_script(
 set -e
 
 module purge
-conda activate auto-opt
+module load anaconda/2025.06
+source activate auto-opt
 
 echo "Using xTB installation:"
 which xtb
