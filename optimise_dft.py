@@ -164,8 +164,6 @@ set -e
 module purge
 module load gaussian/16
 
-source $g16profile
-
 echo "$GAUSS_SCRDIR"
 mkdir -p "$GAUSS_SCRDIR"
 chmod 700 "$GAUSS_SCRDIR"

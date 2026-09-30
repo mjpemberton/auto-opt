@@ -390,6 +390,9 @@ def stage_dft(cfg, sps_dir, successful):
     opt_dir = ensure_dir("opt")
     dft = cfg["dft"]
 
+    if not successful:
+        raise RuntimeError("No successful conformers available for final DFT optimisation.")
+
     cmd = [
         sys.executable, "/home/i/mjp218/auto_opt/optimise_dft.py",
         "--sps_dir", os.path.join("..", sps_dir),
@@ -402,8 +405,9 @@ def stage_dft(cfg, sps_dir, successful):
         "--cpus", str(dft["cpus"]),
         "--opt_dir", ".",
         "--jobname", dft.get("jobname", "opt"),
-        "--conformers", successful,
     ]
+
+    cmd += ["--conformers"] + successful
 
     if dft.get("chrg") is not None:
         cmd += ["--chrg", str(dft["chrg"])]
